@@ -5,10 +5,6 @@ function Links({token, path, setIsLoadLinks}) {
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState([])
 
-  // const token = 'y0_AgAAAABxXFfqAADLWwAAAAETwHveAAC3kh1YH6pAupmnGhkxBuQdsd41jQ'
-
-  // const path = 'Serts'
-
   const fields = '_embedded.items'
 
   const limit = 1000
