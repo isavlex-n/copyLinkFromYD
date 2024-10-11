@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect } from 'react'
 
-function Links({token, path, setIsLoadLinks}) {
-
+function Links({ token, path, setIsLoadLinks }) {
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState([])
 
@@ -13,9 +12,9 @@ function Links({token, path, setIsLoadLinks}) {
     path,
   )}&fields=${fields}&limit${limit}`
 
+
   async function getDataFromDisk(req) {
     try {
-      setLoading(true)
       const dataRes = await fetch(req, {
         method: 'GET',
         headers: {
@@ -24,7 +23,6 @@ function Links({token, path, setIsLoadLinks}) {
       })
       const data = await dataRes.json()
       setFiles([...data._embedded.items])
-      setLoading(false)
       setIsLoadLinks(true)
     } catch (error) {
       setIsLoadLinks(false)
@@ -32,15 +30,52 @@ function Links({token, path, setIsLoadLinks}) {
     }
   }
 
+  async function publishFiles(files) {
+    try {
+      setLoading(true)
+      files.forEach(async (item) => {
+        await fetch(
+          `https://cloud-api.yandex.net/v1/disk/resources/publish?path=${encodeURI(
+            item.path,
+          )}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `OAuth ${token}`,
+            },
+          },
+        )
+      })
+      getDataFromDisk(reqPath)
+      setLoading(false)
+    } catch (error) {
+      setIsLoadLinks(false)
+      console.error('Произошла ошибка!', error)
+    }
+  }
+
   useEffect(() => {
-    if (!token || !path) return;
+    if (!token || !path) return
     getDataFromDisk(reqPath)
   }, [token, path])
+
+  useEffect(() => {
+    if (!files.length) return;
+    publishFiles(files)
+  }, [files])
   return (
-    <ul>{loading ? (<p>Нет ссылок</p>) : files.map((item, i) => (
-      <li key={i}><a href={item.file} className="link">{item.name}</a></li>
-    ))}
-      
+    <ul>
+      {loading ? (
+        <p>Нет ссылок</p>
+      ) : (
+        files.map((item, i) => (
+          <li key={i}>
+            <a href={item.public_url} className="link" target='_blank'>
+              {item.name}
+            </a>
+          </li>
+        ))
+      )}
     </ul>
   )
 }
