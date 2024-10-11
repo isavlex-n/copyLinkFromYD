@@ -10,7 +10,7 @@ function Links({ token, path, setIsLoadLinks }) {
 
   const reqPath = `https://cloud-api.yandex.net/v1/disk/resources?path=${encodeURI(
     path,
-  )}&fields=${fields}&limit${limit}`
+  )}&fields=${fields}&limit=${limit}`
 
 
   async function getDataFromDisk(req) {
@@ -22,7 +22,13 @@ function Links({ token, path, setIsLoadLinks }) {
         },
       })
       const data = await dataRes.json()
-      setFiles([...data._embedded.items])
+      const sortedData = data._embedded.items.map(item => ({
+        name: item.name.split('.')[0],
+        public_url: item.public_url,
+        path: item.path
+      })).sort((a, b) => a.name - b.name)
+      console.log(sortedData)
+      setFiles([...sortedData])
       setIsLoadLinks(true)
     } catch (error) {
       setIsLoadLinks(false)
@@ -46,7 +52,7 @@ function Links({ token, path, setIsLoadLinks }) {
           },
         )
       })
-      getDataFromDisk(reqPath)
+      console.count()
       setLoading(false)
     } catch (error) {
       setIsLoadLinks(false)
