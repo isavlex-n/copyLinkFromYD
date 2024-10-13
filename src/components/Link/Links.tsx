@@ -1,8 +1,25 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, FC, Dispatch, SetStateAction } from 'react'
+import { DataType } from './types'
 
-function Links({ token, path, setIsLoadLinks }) {
+type OwnProps = {
+  token: string
+  path: string
+  setIsLoadLinks: Dispatch<SetStateAction<boolean>>
+}
+
+type Props = FC<OwnProps>
+
+type File = {
+  name: number
+  public_url: undefined | string
+  path: string
+}
+
+type Files = File[]
+
+const Links: Props = ({ token, path, setIsLoadLinks }) => {
   const [loading, setLoading] = useState(false)
-  const [files, setFiles] = useState([])
+  const [files, setFiles] = useState<Files>([])
 
   const fields = '_embedded.items'
 
@@ -13,7 +30,7 @@ function Links({ token, path, setIsLoadLinks }) {
   )}&fields=${fields}&limit=${limit}`
 
 
-  async function getDataFromDisk(req) {
+  async function getDataFromDisk(req: string) {
     try {
       const dataRes = await fetch(req, {
         method: 'GET',
@@ -22,12 +39,12 @@ function Links({ token, path, setIsLoadLinks }) {
         },
       })
       const data = await dataRes.json()
-      const sortedData = data._embedded.items.map(item => ({
-        name: item.name.split('.')[0],
+      const items: DataType[] = data._embedded.items
+      const sortedData: Files = items.map(item => ({
+        name: +item.name.split('.')[0],
         public_url: item.public_url,
         path: item.path
       })).sort((a, b) => a.name - b.name)
-      console.log(sortedData)
       setFiles([...sortedData])
       setIsLoadLinks(true)
     } catch (error) {
@@ -36,7 +53,7 @@ function Links({ token, path, setIsLoadLinks }) {
     }
   }
 
-  async function publishFiles(files) {
+  async function publishFiles(files: Files) {
     try {
       setLoading(true)
       files.forEach(async (item) => {
@@ -52,7 +69,6 @@ function Links({ token, path, setIsLoadLinks }) {
           },
         )
       })
-      console.count()
       setLoading(false)
     } catch (error) {
       setIsLoadLinks(false)
