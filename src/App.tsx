@@ -1,55 +1,166 @@
-import { useState, ChangeEvent } from 'react';
-import Links from './components/Link/Links'
-import Form from './components/Form/Form'
-import './App.css'
+import React, { useState } from "react";
 
-function App() {
-  const [token, setToken] = useState('')
-  const [path, setPath] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [isLoadLinks, setIsLoadLinks] = useState(false)
+async function getFilesInFolder(folderPath, oauthToken) {
+  const response = await fetch(
+    `https://cloud-api.yandex.net/v1/disk/resources?path=${encodeURIComponent(
+      folderPath,
+    )}&fields=_embedded&limit=100000`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `OAuth ${oauthToken}`,
+      },
+    },
+  );
 
-  async function setClipboard(text: string) {
-    const type = "text/plain";
-    const blob = new Blob([text], { type });
-    const data = [new ClipboardItem({ [type]: blob })];
-    await navigator.clipboard.write(data);
-    setLoading(true)
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Ошибка при получении файлов: ${response.status} ${errorText}`,
+    );
   }
 
-  const writeToBuffer = () => {
-    const links = document.querySelectorAll<HTMLLinkElement>('.link') 
-    let stringOfLinks = ''
-    links.forEach(item => stringOfLinks += `${item.href}\n`)
-    setClipboard(stringOfLinks)
+  const data = await response.json();
+  const items = data._embedded.items;
+  if (!items) {
+    throw new Error(
+      "Ответ от API не содержит файлов. Пожалуйста, проверьте путь к папке и токен.",
+    );
   }
-
-  const setTokenHandler = (e: ChangeEvent<HTMLInputElement>)  => {
-    setToken(e.target.value)
-  }
-
-  const setPathHandler = (e: ChangeEvent<HTMLInputElement>) => {
-    setPath(e.target.value)
-  }
-
-  return (
-    <>
-      <h1>Укажи токен и путь к папке с Яндекс диска</h1>
-      <p>Файлы на диске, должны быть именованны цифрами</p>
-      <Form
-        token={token}
-        setToken={setTokenHandler}
-        path={path}
-        setPath={setPathHandler}
-      />
-      <Links
-        token={token}
-        path={path}
-        setIsLoadLinks={setIsLoadLinks}
-      />
-      {isLoadLinks && (<button onClick={writeToBuffer} className={loading ? 'green-bg' : ''}>Копировать ссылки</button>)}
-    </>
-  )
+  return items.filter((item) => item.type === "file"); // Фильтруем только файлы
 }
 
-export default App
+// Функция для публикации файла и получения публичной ссылки
+async function publishFile(filePath, oauthToken) {
+  const response = await fetch(
+    `https://cloud-api.yandex.net/v1/disk/resources/publish?path=${encodeURIComponent(
+      filePath,
+    )}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `OAuth ${oauthToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `Ошибка при публикации файла: ${response.status} ${errorText}`,
+    );
+  }
+
+  const data = await response.json();
+  return data.href; // Возвращаем публичную ссылку
+}
+
+// Главный компонент
+const App = () => {
+  const [token, setToken] = useState("");
+  const [folderPath, setFolderPath] = useState("");
+  const [publicLinks, setPublicLinks] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    setPublicLinks([]);
+
+    try {
+      let files = await getFilesInFolder(folderPath, token);
+      let links = [];
+
+      for (let file of files) {
+        console.log(file);
+        if (file.public_url) continue;
+        await publishFile(file.path, token);
+      }
+      files = await getFilesInFolder(folderPath, token);
+      links = files
+        .map((item: any) => ({
+          name: +item.name.split(".")[0],
+          link: item.public_url,
+          path: item.path,
+        }))
+        .sort((a, b) => a.name - b.name);
+      setPublicLinks(links);
+    } catch (err) {
+      setError("Произошла ошибка: " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopyToClipboard = () => {
+    const text = publicLinks.map((link) => `${link.link}`).join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      alert("Ссылки скопированы в буфер обмена!");
+    });
+  };
+
+  return (
+    <div style={{ padding: "20px" }}>
+      <h1>Публикация файлов на Яндекс.Диске</h1>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label htmlFor="token">OAuth Токен</label>
+          <input
+            type="text"
+            id="token"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            required
+            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
+          />
+        </div>
+        <div>
+          <label htmlFor="folderPath">Путь к папке на Диске</label>
+          <input
+            type="text"
+            id="folderPath"
+            value={folderPath}
+            onChange={(e) => setFolderPath(e.target.value)}
+            required
+            style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={isLoading}
+          style={{ padding: "10px 20px", cursor: "pointer" }}
+        >
+          {isLoading ? "Загружается..." : "Получить публичные ссылки"}
+        </button>
+      </form>
+
+      {error && <div style={{ color: "red", marginTop: "20px" }}>{error}</div>}
+
+      {publicLinks.length > 0 && (
+        <div style={{ marginTop: "20px" }}>
+          <h2>Публичные ссылки на файлы:</h2>
+          <ul>
+            {publicLinks.map((link, index) => (
+              <li key={index}>
+                <a href={link.link} target="_blank" rel="noopener noreferrer">
+                  {link.name}
+                </a>{" "}
+                - {link.link}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={handleCopyToClipboard}
+            style={{ padding: "10px 20px", cursor: "pointer" }}
+          >
+            Копировать ссылки в буфер обмена
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
