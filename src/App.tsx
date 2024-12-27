@@ -62,6 +62,8 @@ const App = () => {
   const [publicLinks, setPublicLinks] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [count, setCount] = useState(0);
+  const [total, setTotal] = useState(0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -72,11 +74,11 @@ const App = () => {
     try {
       let files = await getFilesInFolder(folderPath, token);
       let links = [];
-
+      setTotal(files.length);
       for (let file of files) {
-        console.log(file);
         if (file.public_url) continue;
         await publishFile(file.path, token);
+        setCount((prevCount) => prevCount + 1);
       }
       files = await getFilesInFolder(folderPath, token);
       links = files
@@ -134,6 +136,7 @@ const App = () => {
         >
           {isLoading ? "Загружается..." : "Получить публичные ссылки"}
         </button>
+        {isLoading && `${count} из ${total}`}
       </form>
 
       {error && <div style={{ color: "red", marginTop: "20px" }}>{error}</div>}
