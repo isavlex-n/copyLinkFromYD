@@ -1,6 +1,22 @@
-import React, { useState } from "react";
+import React, { useState, FormEvent } from "react";
 
-async function getFilesInFolder(folderPath, oauthToken) {
+interface FileItem {
+  type: string;
+  path: string;
+  public_url?: string;
+  name: string;
+}
+
+interface PublicLink {
+  name: number;
+  link: string;
+  path: string;
+}
+
+async function getFilesInFolder(
+  folderPath: string,
+  oauthToken: string,
+): Promise<FileItem[]> {
   const response = await fetch(
     `https://cloud-api.yandex.net/v1/disk/resources?path=${encodeURIComponent(
       folderPath,
@@ -27,11 +43,14 @@ async function getFilesInFolder(folderPath, oauthToken) {
       "Ответ от API не содержит файлов. Пожалуйста, проверьте путь к папке и токен.",
     );
   }
-  return items.filter((item) => item.type === "file"); // Фильтруем только файлы
+  return items.filter((item: FileItem) => item.type === "file"); // Фильтруем только файлы
 }
 
 // Функция для публикации файла и получения публичной ссылки
-async function publishFile(filePath, oauthToken) {
+async function publishFile(
+  filePath: string,
+  oauthToken: string,
+): Promise<string> {
   const response = await fetch(
     `https://cloud-api.yandex.net/v1/disk/resources/publish?path=${encodeURIComponent(
       filePath,
@@ -56,41 +75,56 @@ async function publishFile(filePath, oauthToken) {
 }
 
 // Главный компонент
-const App = () => {
-  const [token, setToken] = useState("");
-  const [folderPath, setFolderPath] = useState("");
-  const [publicLinks, setPublicLinks] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [count, setCount] = useState(0);
-  const [total, setTotal] = useState(0);
+const App: React.FC = () => {
+  const [token, setToken] = useState<string>("");
+  const [folderPath, setFolderPath] = useState<string>("");
+  const [publicLinks, setPublicLinks] = useState<PublicLink[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
+  const [count, setCount] = useState<number>(0);
+  const [total, setTotal] = useState<number>(0);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
     setPublicLinks([]);
+    setCount(0); // Сброс счетчика
 
     try {
       let files = await getFilesInFolder(folderPath, token);
-      let links = [];
+      let links: PublicLink[] = [];
       setTotal(files.length);
-      for (let file of files) {
+
+      for (let i = 0; i < files.length; i++) {
+        let file = files[i];
         if (file.public_url) continue;
         await publishFile(file.path, token);
         setCount((prevCount) => prevCount + 1);
       }
       files = await getFilesInFolder(folderPath, token);
       links = files
-        .map((item: any) => ({
+        .map((item) => ({
           name: +item.name.split(".")[0],
-          link: item.public_url,
+          link: item.public_url!,
           path: item.path,
         }))
         .sort((a, b) => a.name - b.name);
+      const allNumbers = links.map((link) => link.name);
+      const minNumber = Math.min(...allNumbers);
+      const maxNumber = Math.max(...allNumbers);
+      const fullRange = Array.from(
+        { length: maxNumber - minNumber + 1 },
+        (_, i) => minNumber + i,
+      );
+      const missingNumbers = fullRange.filter(
+        (num) => !allNumbers.includes(num),
+      );
+
+      console.log(missingNumbers);
       setPublicLinks(links);
     } catch (err) {
-      setError("Произошла ошибка: " + err.message);
+      setError("Произошла ошибка: " + (err as Error).message);
     } finally {
       setIsLoading(false);
     }
